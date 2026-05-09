@@ -1,32 +1,158 @@
-# JobMailer
+# JobMailer — AI-Powered Job Application Automation Platform
 
-JobMailer is a simple Spring Boot application that allows users to quickly send job application emails to recruiters using predefined templates.
+JobMailer is an AI-powered job application automation platform that simplifies and accelerates the entire job application workflow.
 
-## Features
+The idea originated from a real-world frustration while manually applying to jobs every day through LinkedIn and other job portals. Recruiters often post Job Descriptions along with their email addresses, requiring candidates to repeatedly draft emails, customize resumes, attach documents, and send applications manually.
 
-- Send job application emails instantly
-- Multiple email templates
-- Different subject/body/resume per template
-- Gmail SMTP integration
-- Basic authentication security
-- Simple UI for quick usage
+JobMailer automates this entire process into a one-click workflow.
 
-## Tech Stack
+---
 
-- Java 17
-- Spring Boot
-- Spring Mail
-- Spring Security
-- Maven
-- HTML + JavaScript
+# Features
 
-## How It Works
+* AI-powered ATS-friendly resume optimization
+* Automatic email subject and body generation based on Job Description
+* One-click recruiter email sending
+* Resume tailoring according to the provided JD
+* PDF resume generation
+* Dashboard to track sent applications
+* One-click recruiter follow-up emails
+* Multiple email templates
+* Gmail SMTP integration
+* Basic authentication & security
+* Clean and simple UI
 
-1. Select email template
-2. Enter recruiter email
-3. Click Send
-4. Email is sent automatically with the selected template and resume attached
+---
 
-## Running Locally
+# How It Works
 
-Clone the repository
+1. Upload your resume
+2. Paste the Job Description
+3. Enter recruiter email
+4. Click Send
+
+JobMailer automatically:
+
+* analyzes the Job Description,
+* generates a personalized email,
+* optimizes the resume using AI,
+* creates an ATS-friendly PDF resume,
+* attaches it to the email,
+* and sends the application automatically.
+
+The dashboard also allows users to:
+
+* view all sent applications,
+* track recruiter emails,
+* monitor timestamps,
+* and send follow-up emails with a single click.
+
+---
+
+# Tech Stack
+
+## Backend
+
+* Java 17
+* Spring Boot
+* Spring Security
+* Spring Mail
+* Maven
+
+## Frontend
+
+* HTML
+* CSS
+* JavaScript
+
+## AI Integration
+
+* Gemini API / OpenAI API
+
+## PDF & Resume Processing
+
+* Apache POI
+* PDFBox
+* OpenHTMLToPDF
+
+## Database
+
+* MySQL
+
+---
+
+# Architecture Overview
+
+```text
+Frontend UI
+     ↓
+Spring Boot Backend
+     ↓
+Resume Parser Service
+     ↓
+AI Resume Tailoring Engine
+     ↓
+ATS Resume PDF Generator
+     ↓
+Email Service (SMTP)
+     ↓
+Dashboard & Application Tracking
+```
+
+---
+
+# Key Challenges Solved
+
+* Automating repetitive job application workflows
+* AI-based resume optimization while preventing hallucinated experience
+* ATS-friendly resume formatting
+* Dynamic email generation based on Job Description
+* One-click follow-up workflow
+
+---
+
+# Running Locally
+
+## Clone Repository
+
+```bash
+git clone https://github.com/yourusername/jobmailer.git
+```
+
+## Configure Application Properties
+
+Update:
+
+* SMTP credentials
+* Database configuration
+* AI API keys
+
+## Run Backend
+
+```bash
+mvn spring-boot:run
+```
+
+## Open Application
+
+```text
+http://localhost:8080
+```
+
+---
+
+# Future Enhancements
+
+* Resume match scoring
+* LinkedIn integration
+* AI-generated cover letters
+* Auto follow-up scheduling
+* Multiple resume templates
+* Analytics dashboard
+* Chrome extension for LinkedIn job posts
+
+---
+
+# Why This Project Matters
+
+JobMailer was built to solve a practical, real-world problem using automation and AI. The project combines backend engineering, AI integration, resume processing, PDF generation, email systems, and workflow automation into a single product-focused application.
