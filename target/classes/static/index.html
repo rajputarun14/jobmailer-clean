@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Job Mailer</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#0f1724;--card:#0b1220;--accent:#7c3aed;--muted:#94a3b8}
+    html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial}
+    body{background:linear-gradient(180deg,#071029 0%, #0b1220 60%);color:#e6eef8;display:flex;align-items:center;justify-content:center}
+    .card{width:min(820px,94%);background:linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.02));box-shadow:0 10px 30px rgba(2,6,23,0.7);border-radius:14px;padding:28px;backdrop-filter:blur(6px)}
+    .header{display:flex;align-items:center;gap:16px}
+    .logo{width:52px;height:52px;border-radius:10px;background:linear-gradient(135deg,var(--accent),#06b6d4);display:flex;align-items:center;justify-content:center;font-weight:700}
+    h1{margin:0;font-size:20px}
+    p.lead{margin:6px 0 18px;color:var(--muted)}
+    .form{display:flex;gap:16px;flex-wrap:wrap}
+    .field{flex:1 1 260px;display:flex;flex-direction:column}
+    select,input{padding:12px 14px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit}
+    button{background:var(--accent);color:white;padding:12px 18px;border-radius:10px;border:none;font-weight:600;cursor:pointer}
+    button[disabled]{opacity:0.6;cursor:default}
+    .controls{display:flex;gap:12px;align-items:center;margin-top:14px}
+    .status{margin-left:auto;color:var(--muted);font-size:14px}
+    footer{margin-top:18px;color:var(--muted);font-size:13px}
+    @media (max-width:520px){.header{gap:10px}.card{padding:18px}}
+  </style>
+</head>
+<body>
+  <main class="card">
+    <div class="header">
+      <div class="logo">JM</div>
+      <div>
+        <h1>Job Mailer</h1>
+        <p class="lead">Quickly send tailored application emails with attachment.</p>
+      </div>
+      <div style="margin-left:auto;">
+        <button style="background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted);padding:8px 10px;border-radius:8px;font-size:13px" onclick="logout()">Logout</button>
+      </div>
+    </div>
+
+    <div style="height:12px"></div>
+
+    <div class="form">
+      <div class="field">
+        <label for="template" style="font-size:13px;color:var(--muted);margin-bottom:6px">Template</label>
+        <select id="template">
+          <option value="HR">HR</option>
+          <option value="sde">SDE Application</option>
+          <option value="referral">Referral Request</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="email" style="font-size:13px;color:var(--muted);margin-bottom:6px">Recipient Email</label>
+        <input id="email" placeholder="recruiter@example.com" type="email" pattern="[^\s@]+@[^\s@]+\.[^\s@]+">
+      </div>
+
+      <div style="flex-basis:100%;height:6px"></div>
+
+      <div style="flex-basis:100%;">
+        <label style="font-size:13px;color:var(--muted);margin-bottom:6px">Job Description (optional - used for tailoring)</label>
+        <textarea id="jdText" placeholder="Paste job description here" style="width:100%;min-height:120px;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit"></textarea>
+        <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
+          <button id="tailorBtn" onclick="tailorResume()">Tailor & Preview</button>
+          <label style="color:var(--muted);font-size:13px;margin-left:8px"><input id="useTailored" type="checkbox"> Use tailored resume when sending</label>
+          <div id="tailorStatus" style="margin-left:auto;color:var(--muted)"></div>
+        </div>
+      </div>
+
+
+      <div class="field">
+        <label style="font-size:13px;color:var(--muted);margin-bottom:6px">Upload Resume (PDF)</label>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input id="resumeFile" type="file" accept="application/pdf">
+          <button id="uploadBtn" onclick="uploadResume()">Upload</button>
+          <div id="uploadStatus" style="color:var(--muted);font-size:13px">No file uploaded</div>
+          <a id="downloadLink" href="#" style="margin-left:8px;color:#9ad3ff;text-decoration:underline;display:none">Download</a>
+        </div>
+        <label style="font-size:13px;color:var(--muted);margin-top:8px"><input id="useUploaded" type="checkbox"> Use uploaded resume when sending</label>
+      </div>
+
+      <div style="flex-basis:100%;height:6px"></div>
+
+      <div class="controls" style="flex-basis:100%">
+        <button id="sendBtn" onclick="sendMail()">Send Application</button>
+        <button id="dashboardBtn" style="margin-left:8px" onclick="goDashboard()">Dashboard</button>
+        <div class="status" id="status">Idle</div>
+      </div>
+
+      <footer>Tip: use an app-specific SMTP password for Gmail; check logs if sending fails.</footer>
+    </div>
+  </main>
+
+  <script>
+    async function logout(){
+      try{
+        await fetch('/logout',{method:'POST'});
+      }catch(e){}
+      window.location = '/login';
+    }
+
+    async function sendMail(){
+      const email = document.getElementById('email').value.trim();
+      const template = document.getElementById('template').value;
+      const status = document.getElementById('status');
+      const btn = document.getElementById('sendBtn');
+
+      const emailInput = document.getElementById('email');
+      if(!email){status.textContent='Enter recipient email';return}
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if(!emailRegex.test(email)) {
+        alert('Enter a valid email address');
+        emailInput.focus();
+        status.textContent = 'Enter a valid email address';
+        return
+      }
+
+      btn.disabled = true; status.textContent = 'Sending...';
+
+      try{
+        let url = `/send?email=${encodeURIComponent(email)}&template=${encodeURIComponent(template)}`;
+        const useUploaded = document.getElementById('useUploaded').checked;
+        const stored = localStorage.getItem('uploadedResumeId');
+        if (useUploaded && stored) {
+          url += `&resumeId=${encodeURIComponent(stored)}`;
+        }
+        const useTailored = document.getElementById('useTailored').checked;
+        const tailoredId = localStorage.getItem('tailoredId');
+        if (useTailored && tailoredId) {
+          url += `&tailoredId=${encodeURIComponent(tailoredId)}`;
+        }
+        const resp = await fetch(url,{method:'POST'});
+        const text = await resp.text();
+        if(resp.ok){ status.textContent = 'Sent ✓'; alert(text); }
+        else { status.textContent = 'Failed'; alert('Error: '+text); }
+      }catch(err){ status.textContent = 'Error'; alert('Network error: '+err.message); }
+      finally{ btn.disabled = false; setTimeout(()=>status.textContent='Idle',2500); }
+    }
+
+    async function tailorResume(){
+      const jd = document.getElementById('jdText').value.trim();
+      const status = document.getElementById('tailorStatus');
+      const btn = document.getElementById('tailorBtn');
+      if (!jd) { status.textContent = 'Enter JD to tailor'; return }
+      btn.disabled = true; status.textContent = 'Tailoring...';
+      try{
+        const stored = localStorage.getItem('uploadedResumeId');
+        const fd = new URLSearchParams();
+        if (stored) fd.append('resumeId', stored);
+        fd.append('jd', jd);
+        debugger;
+        const res = await fetch('/ai/tailorResume', { method: 'POST', body: fd });
+        const json = await res.json();
+        if (res.ok && json.tailoredId) {
+          localStorage.setItem('tailoredId', json.tailoredId);
+          status.textContent = 'Tailored ready';
+          // show download link in a new window
+          const url = json.downloadUrl || ('/downloadTailored?id=' + encodeURIComponent(json.tailoredId));
+          if (confirm('Tailored resume ready. Preview now?')) window.open(url, '_blank');
+        } else {
+          status.textContent = json.error || 'Tailoring failed';
+          alert('Tailoring failed: ' + (json.error||'unknown'));
+        }
+      }catch(err){ status.textContent='Error'; alert('Tailor error: '+err.message) }
+      finally{ btn.disabled=false }
+    }
+    
+    async function uploadResume(){
+      const inp = document.getElementById('resumeFile');
+      const status = document.getElementById('uploadStatus');
+      const btn = document.getElementById('uploadBtn');
+      if (!inp.files || inp.files.length===0) { status.textContent='Select a PDF file'; return }
+      const file = inp.files[0];
+      if (!file.name.toLowerCase().endsWith('.pdf')) { status.textContent='Only PDF allowed'; return }
+      const fd = new FormData(); fd.append('file', file);
+      btn.disabled = true; status.textContent = 'Uploading...';
+      try{
+        const res = await fetch('/uploadResume', { method: 'POST', body: fd });
+        const json = await res.json();
+        if (res.ok && json.id) {
+          localStorage.setItem('uploadedResumeId', json.id);
+          localStorage.setItem('uploadedResumeName', json.name || json.filename || 'resume.pdf');
+          document.getElementById('uploadStatus').textContent = 'Uploaded: ' + (json.name || json.id);
+          const dl = document.getElementById('downloadLink');
+          dl.style.display = 'inline';
+          dl.textContent = json.name || 'Download';
+          dl.href = '/downloadResume';
+          alert('Resume uploaded (id: '+json.id+')');
+        } else {
+          status.textContent = json.error || 'Upload failed';
+          alert('Upload failed: ' + (json.error||'unknown'));
+        }
+      }catch(err){ status.textContent='Error'; alert('Upload error: '+err.message) }
+      finally{ btn.disabled=false }
+    }
+
+    // on load, fetch current persisted resume id for this user and show it
+    window.addEventListener('DOMContentLoaded', async () => {
+      try {
+        const r = await fetch('/currentResume');
+        const j = await r.json();
+        if (r.ok && j.id) {
+          document.getElementById('uploadStatus').textContent = 'Uploaded: ' + (j.name || j.id);
+          localStorage.setItem('uploadedResumeId', j.id);
+          localStorage.setItem('uploadedResumeName', j.name || j.id);
+          const dl = document.getElementById('downloadLink');
+          dl.style.display = 'inline';
+          dl.href = '/downloadResume';
+          dl.textContent = j.name || 'Download';
+        }
+      } catch (e) {}
+    });
+    function goDashboard(){
+      window.location = '/dashboard.html';
+    }
+  </script>
+</body>
+</html>
