@@ -2,21 +2,17 @@ package com.arun.jobmailer.service;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.FileSystemResource;
-import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.mail.javamail.JavaMailSenderImpl;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 
 import com.arun.jobmailer.model.EmailTemplate;
 import com.arun.jobmailer.model.SentEmail;
-import com.arun.jobmailer.service.SentEmailService;
-
 import jakarta.mail.internet.MimeMessage;
 
 @Service
 public class EmailService {
-
-    @Autowired
-    private JavaMailSender mailSender;
 
     @Autowired
     private SentEmailService sentEmailService;
@@ -24,14 +20,25 @@ public class EmailService {
     @Autowired
     private com.arun.jobmailer.service.S3Service s3Service;
 
+    @Autowired
+    private UserService userService;
+
     @org.springframework.beans.factory.annotation.Value("${aws.s3.use:false}")
     private boolean useS3;
 
+    @Value("${spring.mail.host:smtp.gmail.com}")
+    private String mailHost;
+
+    @Value("${spring.mail.port:587}")
+    private int mailPort;
+
     public SentEmail sendEmail(String email, EmailTemplate template, String templateName, String owner) throws Exception {
-        MimeMessage message = mailSender.createMimeMessage();
+        JavaMailSenderImpl userMailSender = createUserMailSender(owner);
+        MimeMessage message = userMailSender.createMimeMessage();
 
-        MimeMessageHelper helper = new MimeMessageHelper(message, true);
+        MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
+        helper.setFrom(owner);
         helper.setTo(email);
         helper.setSubject(template.getSubject());
         // convert plain-text newlines into HTML paragraphs and <br/>s,
@@ -50,7 +57,7 @@ public class EmailService {
             if (useS3) {
                 // attempt S3 download first
                 tempDownload = java.io.File.createTempFile("resume-", ".pdf");
-                boolean got = s3Service.downloadFile("Arun__Kumar.pdf", tempDownload);
+                boolean got = s3Service.downloadFile("Arun_Kumar_Resume.pdf", tempDownload);
                 if (got) {
                     attachmentFile = tempDownload;
                 } else {
@@ -62,10 +69,10 @@ public class EmailService {
             }
 
             FileSystemResource file = new FileSystemResource(attachmentFile);
-            helper.addAttachment("Arun__Kumar.pdf", file);
+            helper.addAttachment("Arun_Kumar_Resume.pdf", file);
 
             try {
-                mailSender.send(message);
+                userMailSender.send(message);
                 return sent;
             } catch (Exception ex) {
                 try { sentEmailService.delete(sent.getId()); } catch (Exception ignore) {}
@@ -83,9 +90,11 @@ public class EmailService {
      * but does not create a new SentEmail row.
      */
     public void sendFollowup(SentEmail sent, EmailTemplate template) throws Exception {
-        MimeMessage message = mailSender.createMimeMessage();
-        MimeMessageHelper helper = new MimeMessageHelper(message, true);
+        JavaMailSenderImpl userMailSender = createUserMailSender(sent.getOwner());
+        MimeMessage message = userMailSender.createMimeMessage();
+        MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
+        helper.setFrom(sent.getOwner());
         helper.setTo(sent.getRecipient());
         helper.setSubject(template.getSubject());
         String htmlBody = toHtml(template.getBody());
@@ -97,7 +106,7 @@ public class EmailService {
             java.io.File attachmentFile;
             if (useS3) {
                 tempDownload = java.io.File.createTempFile("resume-", ".pdf");
-                boolean got = s3Service.downloadFile("Arun__Kumar.pdf", tempDownload);
+                boolean got = s3Service.downloadFile("Arun_Kumar_Resume.pdf", tempDownload);
                 if (got) {
                     attachmentFile = tempDownload;
                 } else {
@@ -108,9 +117,9 @@ public class EmailService {
             }
 
             FileSystemResource file = new FileSystemResource(attachmentFile);
-            helper.addAttachment("Arun__Kumar.pdf", file);
+            helper.addAttachment("Arun_Kumar_Resume.pdf", file);
 
-            mailSender.send(message);
+            userMailSender.send(message);
         } finally {
             if (tempDownload != null && tempDownload.exists()) {
                 try { tempDownload.delete(); } catch (Exception ignore) {}
@@ -123,10 +132,12 @@ public class EmailService {
      * Creates a SentEmail record as usual and uses the provided attachment path.
      */
     public SentEmail sendEmail(String email, EmailTemplate template, String templateName, String owner, String attachmentPath) throws Exception {
-        MimeMessage message = mailSender.createMimeMessage();
+        JavaMailSenderImpl userMailSender = createUserMailSender(owner);
+        MimeMessage message = userMailSender.createMimeMessage();
 
-        MimeMessageHelper helper = new MimeMessageHelper(message, true);
+        MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
+        helper.setFrom(owner);
         helper.setTo(email);
         helper.setSubject(template.getSubject());
         String htmlBody = toHtml(template.getBody());
@@ -139,12 +150,26 @@ public class EmailService {
         helper.addAttachment(attachmentFile.getName(), file);
 
         try {
-            mailSender.send(message);
+            userMailSender.send(message);
             return sent;
         } catch (Exception ex) {
             try { sentEmailService.delete(sent.getId()); } catch (Exception ignore) {}
             throw ex;
         }
+    }
+
+    private JavaMailSenderImpl createUserMailSender(String owner) {
+        JavaMailSenderImpl sender = new JavaMailSenderImpl();
+        sender.setHost(mailHost);
+        sender.setPort(mailPort);
+        sender.setUsername(owner);
+        sender.setPassword(userService.getGmailAppPassword(owner));
+        sender.getJavaMailProperties().put("mail.smtp.auth", "true");
+        sender.getJavaMailProperties().put("mail.smtp.starttls.enable", "true");
+        sender.getJavaMailProperties().put("mail.smtp.ssl.trust", mailHost);
+        sender.getJavaMailProperties().put("mail.smtp.connectiontimeout", "5000");
+        sender.getJavaMailProperties().put("mail.smtp.timeout", "5000");
+        return sender;
     }
 
     private String toHtml(String body) {

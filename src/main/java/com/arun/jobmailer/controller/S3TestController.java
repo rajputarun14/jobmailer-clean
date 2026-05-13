@@ -21,8 +21,8 @@ public class S3TestController {
     @PostMapping("/upload-test")
     public ResponseEntity<String> uploadTest(@RequestParam(required = false) String key,
                                              @RequestParam(required = false) String file) {
-        String uploadKey = (key == null || key.isEmpty()) ? "Arun__Kumar.pdf" : key;
-        String filePath = (file == null || file.isEmpty()) ? "resume/Arun__Kumar.pdf" : file;
+        String uploadKey = (key == null || key.isEmpty()) ? "Arun_Kumar_Resume.pdf" : key;
+        String filePath = (file == null || file.isEmpty()) ? "resume/Arun_Kumar_Resume.pdf" : file;
         File f = new File(filePath);
         if (!f.exists()) return ResponseEntity.badRequest().body("File not found: " + filePath);
         try {

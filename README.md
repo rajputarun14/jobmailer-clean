@@ -30,3 +30,19 @@ JobMailer is a simple Spring Boot application that allows users to quickly send 
 ## Running Locally
 
 Clone the repository
+
+Start Postgres:
+
+```bash
+docker compose up -d
+```
+
+Run the app with Gmail SMTP credentials:
+
+```bash
+EMAIL_USERNAME="your_email@gmail.com" \
+EMAIL_PASSWORD="your_16_character_gmail_app_password" \
+./mvnw spring-boot:run
+```
+
+For Gmail, `EMAIL_PASSWORD` must be an App Password, not your normal Gmail password.

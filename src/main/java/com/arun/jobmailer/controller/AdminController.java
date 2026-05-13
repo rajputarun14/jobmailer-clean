@@ -1,6 +1,7 @@
 package com.arun.jobmailer.controller;
 
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.arun.jobmailer.model.SentEmail;
 import com.arun.jobmailer.model.UserAccount;
 import com.arun.jobmailer.repository.UserRepository;
+import com.arun.jobmailer.service.AppSettingService;
 import com.arun.jobmailer.service.SentEmailService;
 import com.arun.jobmailer.service.UserService;
 
@@ -27,6 +29,9 @@ public class AdminController {
 
     @Autowired
     private UserService userService;
+
+    @Autowired
+    private AppSettingService appSettingService;
 
     @GetMapping("/admin/emails")
     public ResponseEntity<List<SentEmail>> allEmails() {
@@ -45,5 +50,19 @@ public class AdminController {
         if (u == null) return ResponseEntity.badRequest().body("User not found");
         userService.setRoles(username, roles);
         return ResponseEntity.ok("Updated");
+    }
+
+    @GetMapping("/admin/ai-settings")
+    public ResponseEntity<Map<String, Object>> aiSettings() {
+        return ResponseEntity.ok(Map.of(
+                "provider", "gemini",
+                "geminiApiKeyConfigured", appSettingService.hasGeminiApiKey()
+        ));
+    }
+
+    @PostMapping("/admin/ai-settings/gemini-key")
+    public ResponseEntity<String> saveGeminiKey(@RequestParam String apiKey) {
+        appSettingService.saveGeminiApiKey(apiKey);
+        return ResponseEntity.ok("Gemini API key saved");
     }
 }

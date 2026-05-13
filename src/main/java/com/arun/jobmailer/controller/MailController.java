@@ -5,6 +5,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mail.MailAuthenticationException;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -47,8 +48,7 @@ public class MailController {
             String owner = principal == null ? "anonymous" : principal.getName();
             if (tailoredId != null && !tailoredId.isBlank()) {
                 // use tailored resume from tailored folder
-                java.nio.file.Path ownerDir = uploadService.getResumePath(owner, "").getParent();
-                java.nio.file.Path p = ownerDir.resolve("tailored").resolve(tailoredId + ".pdf");
+                java.nio.file.Path p = uploadService.getTailoredResumePath(owner, tailoredId);
                 if (!java.nio.file.Files.exists(p)) return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Tailored resume not found");
                 emailService.sendEmail(email, t, template, owner, p.toString());
             } else if (resumeId == null || resumeId.isBlank()) {
@@ -73,8 +73,19 @@ public class MailController {
     // List sent emails for dashboard
     @GetMapping("/emails")
     public ResponseEntity<Object> listEmails(Principal principal) {
+        if (isAdmin(principal)) {
+            return ResponseEntity.ok(templateService.getAllSentEmails());
+        }
         String owner = principal == null ? "anonymous" : principal.getName();
         return ResponseEntity.ok(templateService.getAllSentEmails(owner));
+    }
+
+    private boolean isAdmin(Principal principal) {
+        if (!(principal instanceof Authentication authentication)) {
+            return false;
+        }
+        return authentication.getAuthorities().stream()
+                .anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()));
     }
 
     // Tracking pixel endpoint - marks email opened and returns a 1x1 PNG

@@ -22,7 +22,7 @@ public class TemplateService {
                 return new EmailTemplate(
                     "SDE-2 | Java Backend Developer role | 4.5+ YOE",
                     """
-        <p>Hi, I hope you’re doing well.</p>
+        <p>Hi, I hope you're doing well.</p>
 
         <p>I am interested in the <b>SDE-2/Java Backend Developer role</b>. I am currently working as a <b>Senior Software Engineer at Accolite (Bounteous x Accolite)</b> with over 5+ years of experience in backend development.</p>
 
@@ -36,7 +36,7 @@ public class TemplateService {
 
         <p>Best regards<br/>Arun Kumar</p>
         """,
-                    "resume/Arun__Kumar.pdf"
+                    "resume/Arun_Kumar_Resume.pdf"
                 );
         }
 
@@ -53,7 +53,7 @@ Would love to explore opportunities with your team.
 Regards
 Arun Kumar
 """,
-                    "resume/Arun__Kumar.pdf"
+                    "resume/Arun_Kumar_Resume.pdf"
             );
         }
 
@@ -70,7 +70,7 @@ I have 4+ years experience in Java backend development.
 Regards
 Arun Kumar
 """,
-                    "resume/Arun__Kumar.pdf"
+                    "resume/Arun_Kumar_Resume.pdf"
             );
         }
 

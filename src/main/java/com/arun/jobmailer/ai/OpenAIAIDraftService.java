@@ -34,9 +34,8 @@ public class OpenAIAIDraftService implements AIDraftService {
     public String tailorResume(String resumeText, String jdText) throws Exception {
         if (apiKey == null || apiKey.isBlank()) throw new IllegalStateException("OpenAI API key not configured");
 
-        String system = "You are a resume assistant. Produce an ATS-friendly plain-text resume tailored to the provided Job Description. Preserve factual information (company names, job titles, dates) and only rephrase or reorder bullets. Do NOT invent jobs or dates. Output the tailored resume in plain text with clear section headings (Summary, Experience, Education, Skills).";
-
-        String user = "Resume:\n" + resumeText + "\n\nJob Description:\n" + jdText + "\n\nReturn only the tailored resume text.";
+        String system = ResumeTailorPrompts.INSTRUCTIONS;
+        String user = ResumeTailorPrompts.openAiUserContent(resumeText, jdText);
 
         Map<String,Object> requestBody = Map.of(
             "model", model,
@@ -44,7 +43,8 @@ public class OpenAIAIDraftService implements AIDraftService {
                 Map.of("role","system","content",system),
                 Map.of("role","user","content",user)
             },
-            "max_tokens", 1500
+            "max_tokens", 8192,
+            "temperature", 0.25
         );
 
         String body = mapper.writeValueAsString(requestBody);

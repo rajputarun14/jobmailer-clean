@@ -22,16 +22,21 @@ public class UserController {
     private UserService userService;
 
     @PostMapping(value = "/register", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
-    public ResponseEntity<String> register(@RequestParam String username,
-                                           @RequestParam String password) {
+    public ResponseEntity<String> register(@RequestParam String email,
+                                           @RequestParam String password,
+                                           @RequestParam String gmailAppPassword) {
         try {
-            if (username == null || username.isBlank() || password == null || password.isBlank()) {
-                return ResponseEntity.badRequest().body("username and password required");
+            String username = normalizeEmail(email);
+            if (username.isBlank() || password == null || password.isBlank() || gmailAppPassword == null || gmailAppPassword.isBlank()) {
+                return ResponseEntity.badRequest().body("email, login password, and Gmail app password are required");
+            }
+            if (!username.matches("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$")) {
+                return ResponseEntity.badRequest().body("valid email required");
             }
             if (userService.find(username) != null) {
                 return ResponseEntity.badRequest().body("User exists");
             }
-            UserAccount u = userService.createUser(username, password, "USER");
+            UserAccount u = userService.createUser(username, password, gmailAppPassword, "USER");
             // If request likely comes from a browser form, redirect to login
             HttpHeaders headers = new HttpHeaders();
             headers.add(HttpHeaders.LOCATION, "/login.html?registered");
@@ -40,5 +45,10 @@ public class UserController {
             log.error("Failed to register user", e);
             return ResponseEntity.status(500).body("Registration failed: " + e.getMessage());
         }
+    }
+
+    private String normalizeEmail(String email) {
+        if (email == null) return "";
+        return email.trim().toLowerCase();
     }
 }

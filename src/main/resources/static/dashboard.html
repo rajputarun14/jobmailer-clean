@@ -13,11 +13,12 @@
 </head>
 <body>
   <h1>Sent Emails</h1>
+  <p id="sessionUser" style="color:#555;font-size:14px;margin:4px 0 12px"></p>
   <p><a href="/index.html"><button>Home</button></a></p>
   <div id="status"></div>
   <table>
     <thead>
-      <tr><th>Recipient</th><th>Subject</th><th>Sent At</th><th>Opened</th><th>Opened At</th><th>Followups</th><th>Actions</th></tr>
+      <tr><th>From</th><th>To</th><th>Subject</th><th>Sent At</th><th>Opened</th><th>Opened At</th><th>Followups</th><th>Actions</th></tr>
     </thead>
     <tbody id="rows"></tbody>
   </table>
@@ -29,16 +30,28 @@
       const rows = document.getElementById('rows'); rows.innerHTML='';
       data.forEach(e => {
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${e.recipient}</td>
-          <td>${e.subject}</td>
-          <td>${new Date(e.sentAt).toLocaleString()}</td>
-          <td>${e.opened ? 'Yes' : 'No'}</td>
-          <td>${e.openedAt ? new Date(e.openedAt).toLocaleString() : ''}</td>
-          <td>${e.followupsSent}</td>
-          <td><button data-id="${e.id}">Send follow-up</button></td>`;
+        appendCell(tr, e.owner || '');
+        appendCell(tr, e.recipient || '');
+        appendCell(tr, e.subject || '');
+        appendCell(tr, e.sentAt ? new Date(e.sentAt).toLocaleString() : '');
+        appendCell(tr, e.opened ? 'Yes' : 'No');
+        appendCell(tr, e.openedAt ? new Date(e.openedAt).toLocaleString() : '');
+        appendCell(tr, e.followupsSent == null ? '0' : String(e.followupsSent));
+        const actionCell = document.createElement('td');
+        const button = document.createElement('button');
+        button.dataset.id = e.id;
+        button.textContent = 'Send follow-up';
+        actionCell.appendChild(button);
+        tr.appendChild(actionCell);
         rows.appendChild(tr);
       });
       document.querySelectorAll('button[data-id]').forEach(b => b.onclick = followup);
+    }
+
+    function appendCell(row, text){
+      const td = document.createElement('td');
+      td.textContent = text;
+      row.appendChild(td);
     }
 
     async function followup(evt){
@@ -51,6 +64,16 @@
       load();
     }
 
+    async function showSessionUser(){
+      try{
+        const s = await fetch('/api/session');
+        const j = await s.json();
+        if(s.ok && j.username){
+          document.getElementById('sessionUser').textContent = 'Signed in as ' + j.username;
+        }
+      }catch(e){}
+    }
+    showSessionUser();
     load();
     setInterval(load, 5000);
   </script>

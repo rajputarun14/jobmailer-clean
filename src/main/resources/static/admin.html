@@ -7,7 +7,15 @@
 </head>
 <body>
   <h1>Admin Panel</h1>
+  <p id="sessionUser" style="color:#555;font-size:14px;margin:4px 0"></p>
   <p><a href="/">Home</a></p>
+  <h2>AI Settings</h2>
+  <form id="aiForm">
+    <label>Gemini API Key</label>
+    <input id="geminiKey" type="password" autocomplete="off" placeholder="Paste Gemini API key" style="min-width:360px;padding:6px">
+    <button type="submit">Save Gemini Key</button>
+    <span id="aiStatus"></span>
+  </form>
   <h2>Users</h2>
   <table id="users"><thead><tr><th>Username</th><th>Roles</th><th>Created</th><th>Actions</th></tr></thead><tbody></tbody></table>
   <h2>All Sent Emails</h2>
@@ -25,6 +33,24 @@
       });
       document.querySelectorAll('button[data-user]').forEach(b=>b.onclick=makeAdmin);
     }
+    async function loadAiSettings(){
+      const res = await fetch('/admin/ai-settings');
+      const data = await res.json();
+      const status = document.getElementById('aiStatus');
+      status.textContent = data.geminiApiKeyConfigured ? 'Gemini key configured' : 'Gemini key not configured';
+    }
+    async function saveGeminiKey(evt){
+      evt.preventDefault();
+      const key = document.getElementById('geminiKey').value.trim();
+      const status = document.getElementById('aiStatus');
+      if(!key){ status.textContent = 'Enter Gemini API key'; return; }
+      const body = new URLSearchParams();
+      body.append('apiKey', key);
+      const res = await fetch('/admin/ai-settings/gemini-key', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body});
+      const text = await res.text();
+      status.textContent = text;
+      if(res.ok) document.getElementById('geminiKey').value = '';
+    }
     async function loadEmails(){
       const res = await fetch('/admin/emails');
       const rows = await res.json();
@@ -40,7 +66,18 @@
       const res = await fetch('/admin/users/'+encodeURIComponent(user)+'/role', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:'roles=ADMIN'});
       if(res.ok) loadUsers(); else alert('failed');
     }
-    loadUsers(); loadEmails();
+    async function showSessionUser(){
+      try{
+        const s = await fetch('/api/session');
+        const j = await s.json();
+        if(s.ok && j.username){
+          document.getElementById('sessionUser').textContent = 'Signed in as ' + j.username;
+        }
+      }catch(e){}
+    }
+    document.getElementById('aiForm').addEventListener('submit', saveGeminiKey);
+    showSessionUser();
+    loadAiSettings(); loadUsers(); loadEmails();
   </script>
 </body>
 </html>

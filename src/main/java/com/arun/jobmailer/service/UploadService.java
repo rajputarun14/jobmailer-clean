@@ -7,6 +7,7 @@ import java.nio.file.Paths;
 import java.util.UUID;
 import java.io.InputStream;
 import java.nio.file.StandardCopyOption;
+import java.util.regex.Pattern;
 
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -16,6 +17,7 @@ public class UploadService {
 
     private final Path uploadsRoot;
     private static final String CURRENT_FILE = "current.txt";
+    private static final Pattern UUID_PATTERN = Pattern.compile("^[0-9a-fA-F-]{36}$");
 
     public UploadService(@org.springframework.beans.factory.annotation.Value("${uploads.root:uploads}") String uploadsRootStr) throws IOException {
         this.uploadsRoot = Paths.get(uploadsRootStr);
@@ -54,8 +56,27 @@ public class UploadService {
     }
 
     public Path getResumePath(String owner, String id) {
+        if (id != null && !id.isBlank() && !UUID_PATTERN.matcher(id).matches()) {
+            throw new IllegalArgumentException("Invalid resume id");
+        }
         Path ownerDir = uploadsRoot.resolve(safeOwner(owner));
         return ownerDir.resolve(id + ".pdf");
+    }
+
+    public Path getTailoredDir(String owner) {
+        return uploadsRoot.resolve(safeOwner(owner)).resolve("tailored").normalize();
+    }
+
+    public Path getTailoredResumePath(String owner, String id) {
+        if (id == null || !UUID_PATTERN.matcher(id).matches()) {
+            throw new IllegalArgumentException("Invalid tailored resume id");
+        }
+        Path tailoredDir = getTailoredDir(owner);
+        Path resolved = tailoredDir.resolve(id + ".pdf").normalize();
+        if (!resolved.startsWith(tailoredDir)) {
+            throw new IllegalArgumentException("Invalid tailored resume path");
+        }
+        return resolved;
     }
 
     /** Returns the id of the current resume for owner, or null. */

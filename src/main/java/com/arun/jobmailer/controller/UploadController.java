@@ -1,6 +1,7 @@
 package com.arun.jobmailer.controller;
 
 import java.security.Principal;
+import java.util.HashMap;
 import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,13 +25,19 @@ public class UploadController {
     @Autowired
     private UploadService uploadService;
 
+    public UploadController() {}
+
+    public UploadController(UploadService uploadService) {
+        this.uploadService = uploadService;
+    }
+
     @PostMapping("/uploadResume")
     public ResponseEntity<Object> uploadResume(@RequestParam("file") MultipartFile file, Principal principal) {
         String owner = principal == null ? "anonymous" : principal.getName();
         try {
             String id = uploadService.saveResume(file, owner);
             String name = uploadService.getCurrentOriginalName(owner);
-            return ResponseEntity.ok(Map.of("id", id, "name", name));
+            return ResponseEntity.ok(resumeResponse(id, name));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", e.getMessage()));
         }
@@ -42,7 +49,7 @@ public class UploadController {
         try {
             String id = uploadService.getCurrentId(owner);
             String name = uploadService.getCurrentOriginalName(owner);
-            return ResponseEntity.ok(Map.of("id", id, "name", name));
+            return ResponseEntity.ok(resumeResponse(id, name));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", e.getMessage()));
         }
@@ -72,16 +79,23 @@ public class UploadController {
     public ResponseEntity<Resource> downloadTailored(@RequestParam String id, Principal principal) {
         String owner = principal == null ? "anonymous" : principal.getName();
         try {
-            java.nio.file.Path ownerDir = uploadService.getResumePath(owner, "").getParent();
-            java.nio.file.Path p = ownerDir.resolve("tailored").resolve(id + ".pdf");
+            java.nio.file.Path p = uploadService.getTailoredResumePath(owner, id);
             if (!java.nio.file.Files.exists(p)) return ResponseEntity.notFound().build();
             Resource res = new PathResource(p);
             return ResponseEntity.ok()
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + p.getFileName().toString() + "\"")
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + p.getFileName().toString() + "\"")
                     .contentType(MediaType.APPLICATION_PDF)
                     .body(res);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
+    }
+
+    private Map<String, Object> resumeResponse(String id, String name) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("hasResume", id != null && !id.isBlank());
+        response.put("id", id == null ? "" : id);
+        response.put("name", name == null ? "" : name);
+        return response;
     }
 }

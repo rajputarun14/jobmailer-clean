@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.arun.jobmailer.service.AppSettingService;
 
 
 @Service
@@ -23,26 +24,29 @@ public class GeminiAIDraftService implements AIDraftService {
     private final ObjectMapper mapper = new ObjectMapper();
 
     @Value("${gemini.api.key:${GEMINI_API_KEY:}}")
-    private String apiKey;
+    private String fallbackApiKey;
 
-    @Value("${gemini.model:gemini-1.0}")
+    @Value("${gemini.model:gemini-2.5-flash}")
     private String model;
 
-    @Value("${gemini.api.url:https://api.generativemodels.googleapis.com/v1/models/%s:generate}")
+    @Value("${gemini.api.url:https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent}")
     private String apiUrlTemplate;
 
+    private final AppSettingService appSettingService;
+
+    public GeminiAIDraftService(AppSettingService appSettingService) {
+        this.appSettingService = appSettingService;
+    }
 
     @Override
     public String tailorResume(String resumeText, String jdText) throws Exception {
+        String apiKey = appSettingService.getGeminiApiKey()
+                .orElse(fallbackApiKey == null ? "" : fallbackApiKey);
         if (apiKey == null || apiKey.isBlank()) throw new IllegalStateException("Gemini API key not configured");
 
-        // Gemini typically takes the key as a query param: ?key=YOUR_KEY
-        String url = String.format(apiUrlTemplate, model) + "?key=" + apiKey;
+        String url = String.format(apiUrlTemplate, model);
 
-        String prompt = "You are a resume assistant. Produce an ATS-friendly plain-text resume tailored to the provided Job Description. "
-                + "Preserve factual information (company names, job titles, dates) and only rephrase or reorder bullets. Do NOT invent jobs or dates. "
-                + "Output the tailored resume in plain text with clear section headings (Summary, Experience, Education, Skills).\n\n"
-                + "Resume:\n" + resumeText + "\n\nJob Description:\n" + (jdText == null ? "" : jdText) + "\n\nReturn only the tailored resume text.";
+        String prompt = ResumeTailorPrompts.geminiFullPrompt(resumeText, jdText);
 
         // Correct JSON structure for Gemini API
         Map<String, Object> body = Map.of(
@@ -52,8 +56,8 @@ public class GeminiAIDraftService implements AIDraftService {
                 })
             },
             "generationConfig", Map.of(
-                "maxOutputTokens", 2048,
-                "temperature", 0.7
+                "maxOutputTokens", 8192,
+                "temperature", 0.25
             )
         );
         
@@ -63,6 +67,7 @@ public class GeminiAIDraftService implements AIDraftService {
             .uri(URI.create(url))
             .timeout(Duration.ofSeconds(60))
             .header("Content-Type", "application/json")
+            .header("x-goog-api-key", apiKey)
             .POST(HttpRequest.BodyPublishers.ofString(bodyJson))
             .build();
 
