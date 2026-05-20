@@ -15,8 +15,8 @@ import java.nio.charset.StandardCharsets;
 import jakarta.servlet.http.HttpServletResponse;
 
 import com.arun.jobmailer.auth.JwtAuthenticationFilter;
-import com.arun.jobmailer.auth.RateLimitFilter;
 import com.arun.jobmailer.model.UserAccount;
+import com.arun.jobmailer.rateLimiter.filter.RateLimitFilter;
 import com.arun.jobmailer.repository.UserRepository;
 
 @Configuration
