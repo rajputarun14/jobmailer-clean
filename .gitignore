@@ -1,0 +1,17 @@
+target/
+uploads/
+.DS_Store
+*.log
+*.zip
+.env
+src/main/resources/application-local.properties
+target/
+*.class
+.idea/
+.vscode/
+.DS_Store
+.env
+.mvn/
+mvnw
+mvnw.cmd
+
