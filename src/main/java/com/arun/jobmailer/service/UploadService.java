@@ -25,14 +25,15 @@ public class UploadService {
     }
 
     /**
-     * Save uploaded resume for the given owner. Accepts only PDF files.
+     * Save uploaded resume for the given owner. Accepts PDF and DOCX files.
      * Returns the generated id (filename without extension).
      */
     public String saveResume(MultipartFile file, String owner) throws IOException {
         if (file == null || file.isEmpty()) throw new IOException("Empty file");
         String original = file.getOriginalFilename();
-        if (original == null || !original.toLowerCase().endsWith(".pdf")) {
-            throw new IOException("Only PDF resumes are allowed");
+        String extension = resumeExtension(original);
+        if (extension.isBlank()) {
+            throw new IOException("Only PDF and DOCX resumes are allowed");
         }
 
         String id = UUID.randomUUID().toString();
@@ -40,18 +41,17 @@ public class UploadService {
         Files.createDirectories(ownerDir);
         // delete previous current resume if present
         String prev = getCurrentId(owner);
-        Path dest = ownerDir.resolve(id + ".pdf");
+        Path dest = ownerDir.resolve(id + extension);
         try (InputStream in = file.getInputStream()) {
             Files.copy(in, dest, StandardCopyOption.REPLACE_EXISTING);
         }
         if (prev != null && !prev.isBlank()) {
-            Path prevPath = ownerDir.resolve(prev + ".pdf");
-            try { Files.deleteIfExists(prevPath); } catch (Exception ignore) {}
+            try { Files.deleteIfExists(resolveExistingResumePath(ownerDir, prev)); } catch (Exception ignore) {}
         }
         // write current marker with original filename
         String original1 = file.getOriginalFilename();
-        if (original1 == null) original1 = id + ".pdf";
-        Files.writeString(ownerDir.resolve(CURRENT_FILE), id + "::" + original1);
+        if (original1 == null) original1 = id + extension;
+        Files.writeString(ownerDir.resolve(CURRENT_FILE), id + "::" + original1 + "::" + extension);
         return id;
     }
 
@@ -60,7 +60,7 @@ public class UploadService {
             throw new IllegalArgumentException("Invalid resume id");
         }
         Path ownerDir = uploadsRoot.resolve(safeOwner(owner));
-        return ownerDir.resolve(id + ".pdf");
+        return resolveExistingResumePath(ownerDir, id);
     }
 
     public Path getTailoredDir(String owner) {
@@ -112,6 +112,31 @@ public class UploadService {
         String id = getCurrentId(owner);
         if (id == null) return null;
         return getResumePath(owner, id);
+    }
+
+    public String getCurrentFileType(String owner) {
+        Path path = getCurrentResumePath(owner);
+        if (path == null) return "";
+        String fileName = path.getFileName().toString().toLowerCase();
+        if (fileName.endsWith(".docx")) return "docx";
+        if (fileName.endsWith(".pdf")) return "pdf";
+        return "";
+    }
+
+    private Path resolveExistingResumePath(Path ownerDir, String id) {
+        Path pdf = ownerDir.resolve(id + ".pdf");
+        if (Files.exists(pdf)) return pdf;
+        Path docx = ownerDir.resolve(id + ".docx");
+        if (Files.exists(docx)) return docx;
+        return pdf;
+    }
+
+    private String resumeExtension(String filename) {
+        if (filename == null) return "";
+        String lower = filename.toLowerCase();
+        if (lower.endsWith(".pdf")) return ".pdf";
+        if (lower.endsWith(".docx")) return ".docx";
+        return "";
     }
 
     private String safeOwner(String owner) {

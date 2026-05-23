@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.arun.jobmailer.dto.GenerateEmailResponse;
 
 @Service
 @ConditionalOnProperty(prefix = "ai", name = "provider", havingValue = "openai")
@@ -70,5 +71,91 @@ public class OpenAIAIDraftService implements AIDraftService {
         String text = first.path("message").path("content").asText();
         if (text == null || text.isBlank()) text = first.path("text").asText();
         return text;
+    }
+
+    @Override
+    public String draftApplicationEmail(String resumeText, String jdText, String subject, String fallbackName) throws Exception {
+        if (apiKey == null || apiKey.isBlank()) throw new IllegalStateException("OpenAI API key not configured");
+
+        Map<String,Object> requestBody = Map.of(
+            "model", model,
+            "messages", new Object[] {
+                Map.of("role","system","content","Draft concise, factual job application emails from resume and JD context."),
+                Map.of("role","user","content",ResumeTailorPrompts.emailDraftPrompt(resumeText, jdText, subject, fallbackName))
+            },
+            "max_tokens", 1200,
+            "temperature", 0.35
+        );
+
+        String body = mapper.writeValueAsString(requestBody);
+
+        HttpRequest req = HttpRequest.newBuilder()
+            .uri(URI.create(apiUrl))
+            .timeout(Duration.ofSeconds(60))
+            .header("Content-Type","application/json")
+            .header("Authorization","Bearer " + apiKey)
+            .POST(HttpRequest.BodyPublishers.ofString(body))
+            .build();
+
+        HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString());
+        if (resp.statusCode() / 100 != 2) {
+            throw new IllegalStateException("AI provider error: " + resp.statusCode() + " " + resp.body());
+        }
+
+        JsonNode root = mapper.readTree(resp.body());
+        JsonNode choices = root.path("choices");
+        if (!choices.isArray() || choices.size() == 0) throw new IllegalStateException("No choices from AI");
+        String text = choices.get(0).path("message").path("content").asText();
+        if (text == null || text.isBlank()) text = choices.get(0).path("text").asText();
+        return text;
+    }
+
+    @Override
+    public GenerateEmailResponse generateApplicationEmail(String resumeText, String jdText, String subject, String fallbackName) throws Exception {
+        if (apiKey == null || apiKey.isBlank()) throw new IllegalStateException("OpenAI API key not configured");
+
+        Map<String,Object> requestBody = Map.of(
+            "model", model,
+            "messages", new Object[] {
+                Map.of("role","system","content","Return only valid JSON for a personalized job outreach package."),
+                Map.of("role","user","content",ResumeTailorPrompts.structuredEmailPrompt(resumeText, jdText, subject, fallbackName))
+            },
+            "max_tokens", 1800,
+            "temperature", 0.25
+        );
+
+        String body = mapper.writeValueAsString(requestBody);
+        HttpRequest req = HttpRequest.newBuilder()
+            .uri(URI.create(apiUrl))
+            .timeout(Duration.ofSeconds(60))
+            .header("Content-Type","application/json")
+            .header("Authorization","Bearer " + apiKey)
+            .POST(HttpRequest.BodyPublishers.ofString(body))
+            .build();
+
+        HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString());
+        if (resp.statusCode() / 100 != 2) {
+            throw new IllegalStateException("AI provider error: " + resp.statusCode() + " " + resp.body());
+        }
+
+        JsonNode choices = mapper.readTree(resp.body()).path("choices");
+        if (!choices.isArray() || choices.isEmpty()) throw new IllegalStateException("No choices from AI");
+        String text = choices.get(0).path("message").path("content").asText();
+        return mapper.readValue(stripJsonFence(text), GenerateEmailResponse.class);
+    }
+
+    private String stripJsonFence(String value) {
+        if (value == null) return "{}";
+        String trimmed = value.trim();
+        if (trimmed.startsWith("```")) {
+            trimmed = trimmed.replaceFirst("(?s)^```(?:json)?\\s*", "");
+            trimmed = trimmed.replaceFirst("(?s)\\s*```$", "");
+        }
+        int first = trimmed.indexOf('{');
+        int last = trimmed.lastIndexOf('}');
+        if (first >= 0 && last > first) {
+            return trimmed.substring(first, last + 1);
+        }
+        return trimmed;
     }
 }

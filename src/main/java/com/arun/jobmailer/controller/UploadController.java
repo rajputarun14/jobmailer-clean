@@ -17,6 +17,7 @@ import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 
+import com.arun.jobmailer.dto.ResumeUploadResponse;
 import com.arun.jobmailer.service.UploadService;
 
 @RestController
@@ -33,11 +34,16 @@ public class UploadController {
 
     @PostMapping("/uploadResume")
     public ResponseEntity<Object> uploadResume(@RequestParam("file") MultipartFile file, Principal principal) {
+        return uploadResumeDocument(file, principal);
+    }
+
+    @PostMapping("/api/resume/upload")
+    public ResponseEntity<Object> uploadResumeDocument(@RequestParam("file") MultipartFile file, Principal principal) {
         String owner = principal == null ? "anonymous" : principal.getName();
         try {
             String id = uploadService.saveResume(file, owner);
             String name = uploadService.getCurrentOriginalName(owner);
-            return ResponseEntity.ok(resumeResponse(id, name));
+            return ResponseEntity.ok(new ResumeUploadResponse(true, id, name == null ? "" : name, uploadService.getCurrentFileType(owner)));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", e.getMessage()));
         }
@@ -49,7 +55,7 @@ public class UploadController {
         try {
             String id = uploadService.getCurrentId(owner);
             String name = uploadService.getCurrentOriginalName(owner);
-            return ResponseEntity.ok(resumeResponse(id, name));
+            return ResponseEntity.ok(resumeResponse(owner, id, name));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", e.getMessage()));
         }
@@ -66,9 +72,12 @@ public class UploadController {
             Resource res = new PathResource(p);
                 String original = uploadService.getCurrentOriginalName(owner);
                 String fileName = original != null ? original : p.getFileName().toString();
+                MediaType contentType = fileName.toLowerCase().endsWith(".docx")
+                        ? MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+                        : MediaType.APPLICATION_PDF;
                 return ResponseEntity.ok()
                     .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"")
-                    .contentType(MediaType.APPLICATION_PDF)
+                    .contentType(contentType)
                     .body(res);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
@@ -91,11 +100,12 @@ public class UploadController {
         }
     }
 
-    private Map<String, Object> resumeResponse(String id, String name) {
+    private Map<String, Object> resumeResponse(String owner, String id, String name) {
         Map<String, Object> response = new HashMap<>();
         response.put("hasResume", id != null && !id.isBlank());
         response.put("id", id == null ? "" : id);
         response.put("name", name == null ? "" : name);
+        response.put("fileType", id == null || id.isBlank() ? "" : uploadService.getCurrentFileType(owner));
         return response;
     }
 }

@@ -16,7 +16,7 @@
     p.lead{margin:6px 0 18px;color:var(--muted)}
     .form{display:flex;gap:16px;flex-wrap:wrap}
     .field{flex:1 1 260px;display:flex;flex-direction:column}
-    select,input{padding:12px 14px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit}
+    select,input,textarea{padding:12px 14px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit}
     button{background:var(--accent);color:white;padding:12px 18px;border-radius:10px;border:none;font-weight:600;cursor:pointer}
     button[disabled]{opacity:0.6;cursor:default}
     .controls{display:flex;gap:12px;align-items:center;margin-top:14px}
@@ -58,11 +58,19 @@
         <input id="email" placeholder="recruiter@example.com" type="email" pattern="[^\s@]+@[^\s@]+\.[^\s@]+">
       </div>
 
+      <div class="field" style="flex-basis:100%">
+        <label for="subject" style="font-size:13px;color:var(--muted);margin-bottom:6px">Email Subject</label>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input id="subject" placeholder="Role | Key skill | YOE" maxlength="255" style="flex:1">
+          <button id="saveSubjectBtn" type="button" onclick="saveSubject()">Save</button>
+        </div>
+      </div>
+
       <div style="flex-basis:100%;height:6px"></div>
 
       <div style="flex-basis:100%;">
         <label style="font-size:13px;color:var(--muted);margin-bottom:6px">Job description — paste the posting. AI rewrites your resume to <strong>mirror your sections</strong> and <strong>match the JD</strong> (skills, terminology, bullets—no invented jobs). The preview PDF uses a <strong>simple standard font</strong>; your original file’s visual design is not cloned.</label>
-        <textarea id="jdText" placeholder="Paste job description here" style="width:100%;min-height:120px;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit"></textarea>
+        <textarea id="jdText" placeholder="Paste job description here" style="width:100%;min-height:120px"></textarea>
         <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
           <button id="tailorBtn" onclick="tailorResume()">Tailor & Preview</button>
           <label style="color:var(--muted);font-size:13px;margin-left:8px"><input id="useTailored" type="checkbox"> Use tailored resume when sending</label>
@@ -74,7 +82,7 @@
       <div class="field">
         <label style="font-size:13px;color:var(--muted);margin-bottom:6px">Upload Resume (PDF)</label>
         <div style="display:flex;gap:8px;align-items:center">
-          <input id="resumeFile" type="file" accept="application/pdf">
+          <input id="resumeFile" type="file" accept="application/pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
           <button id="uploadBtn" onclick="uploadResume()">Upload</button>
           <div id="uploadStatus" style="color:var(--muted);font-size:13px">No file uploaded</div>
           <a id="downloadLink" href="#" style="margin-left:8px;color:#9ad3ff;text-decoration:underline;display:none">Download</a>
@@ -96,6 +104,22 @@
   </main>
 
   <script>
+    let currentUsername = '';
+
+    function subjectStorageKey(username){
+      return username ? 'emailSubject:' + username : 'emailSubject';
+    }
+
+    function cacheSubject(subject){
+      if (!subject) return;
+      localStorage.setItem('emailSubject', subject);
+      localStorage.setItem(subjectStorageKey(currentUsername), subject);
+    }
+
+    function cachedSubject(username){
+      return localStorage.getItem(subjectStorageKey(username)) || localStorage.getItem('emailSubject') || '';
+    }
+
     async function logout(){
       try{
         await fetch('/logout',{method:'POST'});
@@ -106,6 +130,8 @@
     async function sendMail(){
       const email = document.getElementById('email').value.trim();
       const template = document.getElementById('template').value;
+      const subject = document.getElementById('subject').value.trim();
+      const jd = document.getElementById('jdText').value.trim();
       const status = document.getElementById('status');
       const btn = document.getElementById('sendBtn');
 
@@ -118,11 +144,16 @@
         status.textContent = 'Enter a valid email address';
         return
       }
+      if(!subject){status.textContent='Enter email subject';return}
 
       btn.disabled = true; status.textContent = 'Sending...';
 
       try{
         let url = `/send?email=${encodeURIComponent(email)}&template=${encodeURIComponent(template)}`;
+        url += `&subject=${encodeURIComponent(subject)}`;
+        if (jd) {
+          url += `&jd=${encodeURIComponent(jd)}`;
+        }
         const useUploaded = document.getElementById('useUploaded').checked;
         const stored = localStorage.getItem('uploadedResumeId');
         if (useUploaded && stored) {
@@ -140,10 +171,40 @@
           const j = JSON.parse(text);
           if (j.error) display = j.error;
         } catch (e) { /* plain text body */ }
-        if(resp.ok){ status.textContent = 'Sent ✓'; alert(display); }
+        if(resp.ok){ cacheSubject(subject); status.textContent = 'Sent ✓'; alert(display); }
         else { status.textContent = 'Failed'; alert('Error: '+display); }
       }catch(err){ status.textContent = 'Error'; alert('Network error: '+err.message); }
       finally{ btn.disabled = false; setTimeout(()=>status.textContent='Idle',2500); }
+    }
+
+    async function saveSubject(){
+      const subject = document.getElementById('subject').value.trim();
+      const status = document.getElementById('status');
+      const btn = document.getElementById('saveSubjectBtn');
+      if (!subject) { status.textContent = 'Enter email subject'; return }
+      cacheSubject(subject);
+      btn.disabled = true; status.textContent = 'Saving subject...';
+      try {
+        const fd = new URLSearchParams();
+        fd.append('subject', subject);
+        const res = await fetch('/api/email-settings', { method: 'POST', body: fd });
+        const raw = await res.text();
+        let json;
+        try { json = JSON.parse(raw); } catch (e) { json = { error: raw }; }
+        if (res.ok) {
+          cacheSubject(json.subject || subject);
+          document.getElementById('subject').value = json.subject || subject;
+          status.textContent = 'Subject saved';
+        } else {
+          status.textContent = json.error || 'Save failed';
+        }
+      } catch (err) {
+        status.textContent = 'Save error';
+        alert('Could not save subject: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        setTimeout(()=>status.textContent='Idle',2500);
+      }
     }
 
     async function tailorResume(){
@@ -249,7 +310,8 @@
       const btn = document.getElementById('uploadBtn');
       if (!inp.files || inp.files.length===0) { status.textContent='Select a PDF file'; return }
       const file = inp.files[0];
-      if (!file.name.toLowerCase().endsWith('.pdf')) { status.textContent='Only PDF allowed'; return }
+      const lowerName = file.name.toLowerCase();
+      if (!lowerName.endsWith('.pdf') && !lowerName.endsWith('.docx')) { status.textContent='Only PDF or DOCX allowed'; return }
       const fd = new FormData(); fd.append('file', file);
       btn.disabled = true; status.textContent = 'Uploading...';
       try{
@@ -280,10 +342,12 @@
 
     // on load, fetch current persisted resume id for this user and show it
     window.addEventListener('DOMContentLoaded', async () => {
+      const subjectInput = document.getElementById('subject');
       try {
         const s = await fetch('/api/session');
         const sj = await s.json();
         if (s.ok && sj.username) {
+          currentUsername = sj.username;
           const box = document.getElementById('sessionUser');
           box.textContent = '';
           box.appendChild(document.createTextNode('Signed in as '));
@@ -293,6 +357,16 @@
         }
         if (s.ok && sj.admin) {
           document.getElementById('adminPanelBtn').style.display = 'inline-block';
+        }
+      } catch (e) {}
+      const localSubject = cachedSubject(currentUsername);
+      if (localSubject) subjectInput.value = localSubject;
+      try {
+        const settings = await fetch('/api/email-settings');
+        const settingsJson = await settings.json();
+        if (settings.ok && settingsJson.subject) {
+          subjectInput.value = settingsJson.subject;
+          cacheSubject(settingsJson.subject);
         }
       } catch (e) {}
       try {

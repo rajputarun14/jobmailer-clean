@@ -11,12 +11,14 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 import java.security.Principal;
+import java.util.Map;
 
 import jakarta.mail.AuthenticationFailedException;
 
 import com.arun.jobmailer.model.EmailTemplate;
 import com.arun.jobmailer.service.EmailService;
 import com.arun.jobmailer.service.TemplateService;
+import com.arun.jobmailer.service.UserService;
 
 @RestController
 public class MailController {
@@ -30,44 +32,66 @@ public class MailController {
     @Autowired
     private com.arun.jobmailer.service.UploadService uploadService;
 
+    @Autowired
+    private UserService userService;
+
     @PostMapping("/send")
     public ResponseEntity<String> sendMail(@RequestParam String email,
                                            @RequestParam String template,
                                            @RequestParam(required=false) String resumeId,
                                            @RequestParam(required=false) String tailoredId,
+                                           @RequestParam(required=false) String subject,
+                                           @RequestParam(required=false) String jd,
                                            Principal principal) {
-        EmailTemplate t = templateService.getTemplate(template);
-
-        if (t == null) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body("Template not found: " + template);
-        }
-
         try {
-            // send and record sent email (includes tracking pixel)
             String owner = principal == null ? "anonymous" : principal.getName();
-            if (tailoredId != null && !tailoredId.isBlank()) {
-                // use tailored resume from tailored folder
-                java.nio.file.Path p = uploadService.getTailoredResumePath(owner, tailoredId);
-                if (!java.nio.file.Files.exists(p)) return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Tailored resume not found");
-                emailService.sendEmail(email, t, template, owner, p.toString());
-            } else if (resumeId == null || resumeId.isBlank()) {
-                emailService.sendEmail(email, t, template, owner);
+            java.nio.file.Path attachmentPath = resolveAttachmentPath(owner, resumeId, tailoredId);
+            String finalSubject = subject;
+            if (finalSubject != null && !finalSubject.isBlank()) {
+                userService.saveEmailSubject(owner, finalSubject);
             } else {
-                java.nio.file.Path p = uploadService.getResumePath(owner, resumeId);
-                if (!java.nio.file.Files.exists(p)) {
-                    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Uploaded resume not found");
-                }
-                emailService.sendEmail(email, t, template, owner, p.toString());
+                finalSubject = userService.getEmailSubject(owner);
+            }
+
+            EmailTemplate t = templateService.getTemplate(template, owner, finalSubject, jd, attachmentPath);
+            if (t == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body("Template not found: " + template);
+            }
+
+            // send and record sent email (includes tracking pixel)
+            if (tailoredId != null && !tailoredId.isBlank()) {
+                emailService.sendEmail(email, t, template, owner, attachmentPath.toString());
+            } else if (attachmentPath != null && java.nio.file.Files.exists(attachmentPath)) {
+                emailService.sendEmail(email, t, template, owner, attachmentPath.toString());
+            } else {
+                emailService.sendEmail(email, t, template, owner);
             }
             return ResponseEntity.ok("Email Sent!");
         } catch (MailAuthenticationException | AuthenticationFailedException e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body("SMTP authentication failed: " + e.getMessage());
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(e.getMessage());
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Failed to send email: " + e.getMessage());
         }
+    }
+
+    @GetMapping("/api/email-settings")
+    public ResponseEntity<Map<String, Object>> emailSettings(Principal principal) {
+        String owner = principal == null ? "anonymous" : principal.getName();
+        return ResponseEntity.ok(Map.of("subject", userService.getEmailSubject(owner)));
+    }
+
+    @PostMapping("/api/email-settings")
+    public ResponseEntity<Map<String, Object>> saveEmailSettings(@RequestParam(required=false) String subject,
+                                                                 Principal principal) {
+        String owner = principal == null ? "anonymous" : principal.getName();
+        userService.saveEmailSubject(owner, subject);
+        return ResponseEntity.ok(Map.of("subject", userService.getEmailSubject(owner)));
     }
 
     // List sent emails for dashboard
@@ -86,6 +110,28 @@ public class MailController {
         }
         return authentication.getAuthorities().stream()
                 .anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()));
+    }
+
+    private java.nio.file.Path resolveAttachmentPath(String owner, String resumeId, String tailoredId) {
+        if (tailoredId != null && !tailoredId.isBlank()) {
+            java.nio.file.Path p = uploadService.getTailoredResumePath(owner, tailoredId);
+            if (!java.nio.file.Files.exists(p)) {
+                throw new IllegalArgumentException("Tailored resume not found");
+            }
+            return p;
+        }
+        if (resumeId != null && !resumeId.isBlank()) {
+            java.nio.file.Path p = uploadService.getResumePath(owner, resumeId);
+            if (!java.nio.file.Files.exists(p)) {
+                throw new IllegalArgumentException("Uploaded resume not found");
+            }
+            return p;
+        }
+        java.nio.file.Path current = uploadService.getCurrentResumePath(owner);
+        if (current != null && java.nio.file.Files.exists(current)) {
+            return current;
+        }
+        return null;
     }
 
     // Tracking pixel endpoint - marks email opened and returns a 1x1 PNG

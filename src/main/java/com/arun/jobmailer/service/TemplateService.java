@@ -1,10 +1,13 @@
 package com.arun.jobmailer.service;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import com.arun.jobmailer.dto.GenerateEmailResponse;
 import com.arun.jobmailer.model.EmailTemplate;
 import com.arun.jobmailer.model.SentEmail;
 
@@ -16,6 +19,12 @@ public class TemplateService {
 
     @Autowired
     private EmailService emailService;
+
+    @Autowired
+    private AiEmailGenerationService aiEmailGenerationService;
+
+    @Autowired
+    private ResumeParserService resumeParserService;
 
     public EmailTemplate getTemplate(String name) {
         if (name.equals("HR")) {
@@ -77,6 +86,28 @@ Arun Kumar
         return null;
     }
 
+    public EmailTemplate getTemplate(String name, String owner, String subject, String jd, Path resumePath) throws Exception {
+        EmailTemplate base = getTemplate(name);
+        if (base == null) return null;
+
+        String finalSubject = cleanSubject(subject);
+        if (finalSubject.isBlank()) finalSubject = base.getSubject();
+
+        Path sourcePath = resumePath;
+        if ((sourcePath == null || !Files.exists(sourcePath)) && base.getAttachment() != null) {
+            sourcePath = Path.of(base.getAttachment());
+        }
+
+        if (sourcePath == null || !Files.exists(sourcePath)) {
+            return new EmailTemplate(finalSubject, base.getBody(), base.getAttachment());
+        }
+
+        String resumeText = resumeParserService.extractText(sourcePath);
+        String fallbackName = nameFromResume(resumeText, nameFromOwner(owner));
+        GenerateEmailResponse generated = aiEmailGenerationService.generateFromText(resumeText, jd == null ? "" : jd, finalSubject, fallbackName);
+        return new EmailTemplate(generated.subject(), generated.emailBody(), sourcePath.toString());
+    }
+
     public List<SentEmail> getAllSentEmails() {
         return sentEmailService.list();
     }
@@ -101,5 +132,37 @@ Arun Kumar
         emailService.sendFollowup(s, t);
         sentEmailService.incrementFollowups(id);
         return true;
+    }
+
+    private String cleanSubject(String subject) {
+        if (subject == null) return "";
+        String cleaned = subject.replace("\r", " ").replace("\n", " ").trim();
+        return cleaned.length() > 255 ? cleaned.substring(0, 255) : cleaned;
+    }
+
+    private String nameFromOwner(String owner) {
+        if (owner == null || owner.isBlank()) return "Candidate";
+        String localPart = owner.contains("@") ? owner.substring(0, owner.indexOf('@')) : owner;
+        String[] parts = localPart.replace('.', ' ').replace('_', ' ').replace('-', ' ').trim().split("\\s+");
+        StringBuilder name = new StringBuilder();
+        for (String part : parts) {
+            if (part.isBlank()) continue;
+            if (!name.isEmpty()) name.append(' ');
+            name.append(part.substring(0, 1).toUpperCase()).append(part.substring(1).toLowerCase());
+        }
+        return name.isEmpty() ? "Candidate" : name.toString();
+    }
+
+    private String nameFromResume(String resumeText, String fallbackName) {
+        if (resumeText == null || resumeText.isBlank()) return fallbackName;
+        String[] lines = resumeText.replace("\r\n", "\n").replace("\r", "\n").split("\n");
+        for (String line : lines) {
+            String cleaned = line.trim();
+            if (cleaned.isBlank() || cleaned.contains("@") || cleaned.toLowerCase().contains("http")) continue;
+            if (!cleaned.matches("[A-Za-z][A-Za-z .'-]{2,60}")) continue;
+            int words = cleaned.split("\\s+").length;
+            if (words >= 2 && words <= 4) return cleaned;
+        }
+        return fallbackName;
     }
 }

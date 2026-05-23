@@ -20,6 +20,9 @@ public class UserAccount {
     @Column(name = "encrypted_gmail_app_password", length = 2048)
     private String encryptedGmailAppPassword;
 
+    @Column(name = "email_subject", length = 255)
+    private String emailSubject;
+
     // comma-separated roles, e.g. ROLE_USER,ROLE_ADMIN
     private String roles;
 
@@ -43,6 +46,8 @@ public class UserAccount {
     public void setPassword(String password) { this.password = password; }
     public String getEncryptedGmailAppPassword() { return encryptedGmailAppPassword; }
     public void setEncryptedGmailAppPassword(String encryptedGmailAppPassword) { this.encryptedGmailAppPassword = encryptedGmailAppPassword; }
+    public String getEmailSubject() { return emailSubject; }
+    public void setEmailSubject(String emailSubject) { this.emailSubject = emailSubject; }
     public String getRoles() { return roles; }
     public void setRoles(String roles) { this.roles = roles; }
     public boolean isEnabled() { return enabled; }

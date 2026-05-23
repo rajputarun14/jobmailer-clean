@@ -28,7 +28,9 @@ public class RateLimitFilter extends OncePerRequestFilter{
         if ("GET".equalsIgnoreCase(request.getMethod())) return true;
         return !(path.equals("/send")
                 || path.startsWith("/ai/")
+                || path.startsWith("/api/ai/")
                 || path.equals("/uploadResume")
+                || path.equals("/api/resume/upload")
                 || path.startsWith("/emails/")
                 || path.startsWith("/admin/"));
     }

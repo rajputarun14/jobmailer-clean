@@ -53,6 +53,18 @@ public class UserService {
         return repo.findById(username).orElse(null);
     }
 
+    public String getEmailSubject(String username) {
+        UserAccount user = find(username);
+        return user == null ? "" : cleanSubject(user.getEmailSubject());
+    }
+
+    public void saveEmailSubject(String username, String subject) {
+        UserAccount user = find(username);
+        if (user == null) return;
+        user.setEmailSubject(cleanSubject(subject));
+        repo.save(user);
+    }
+
     public java.util.List<UserAccount> listAll() {
         return repo.findAll();
     }
@@ -67,5 +79,11 @@ public class UserService {
     private String normalizeEmail(String email) {
         if (email == null) return "";
         return email.trim().toLowerCase();
+    }
+
+    private String cleanSubject(String subject) {
+        if (subject == null) return "";
+        String cleaned = subject.replace("\r", " ").replace("\n", " ").trim();
+        return cleaned.length() > 255 ? cleaned.substring(0, 255) : cleaned;
     }
 }

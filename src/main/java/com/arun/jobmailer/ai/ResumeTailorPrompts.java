@@ -54,4 +54,62 @@ public final class ResumeTailorPrompts {
                 + "Do not append notes. Do not provide a summary of changes. "
                 + "Output the full, rewritten resume text from top to bottom, mirroring the original structure exactly.";
     }
+
+    public static String emailDraftPrompt(String resumeText, String jdText, String subject, String fallbackName) {
+        String safeSubject = subject == null ? "" : subject;
+        String safeName = fallbackName == null ? "Candidate" : fallbackName;
+        return """
+                You are an expert career email writer. Draft a short, high-conversion email body for a job application/referral request.
+
+                Rules:
+                1. Use the resume as the source of truth. Do not invent employers, years, skills, metrics, or achievements.
+                2. Match the Job Description when it is provided, but only using skills and experience supported by the resume.
+                3. Keep the body concise: greeting, 2 short paragraphs, attachment/referral ask, thanks, and sign-off.
+                4. Start exactly with "Hi, I hope you're doing well." Do not use Dear. Do not mention hiring manager names.
+                5. Do not write the subject line. Do not include markdown, bullets, code fences, bracketed placeholders, or text like [Hiring Manager Name].
+                6. Include 2-4 concrete skills, tools, domains, company names, or outcomes from the resume.
+                7. End with "Best regards" followed by the candidate name from the resume. If unsure, use this fallback name: %s.
+
+                Email subject/context:
+                %s
+
+                %s
+
+                %s
+                """.formatted(safeName, safeSubject, originalResumeSection(resumeText), jobDescriptionSection(jdText));
+    }
+
+    public static String structuredEmailPrompt(String resumeText, String jdText, String subject, String fallbackName) {
+        String safeSubject = subject == null ? "" : subject;
+        String safeName = fallbackName == null ? "Candidate" : fallbackName;
+        return """
+                You are a senior technical recruiter and career writer.
+
+                Generate a personalized cold outreach package from the candidate resume and JD.
+
+                Strict rules:
+                - Return ONLY valid JSON. No markdown and no commentary.
+                - JSON keys must be: subject, emailBody, linkedinMessage, atsScore, matchedSkills, missingKeywords.
+                - emailBody must be under 180 words.
+                - Start emailBody with: "Hi, I hope you're doing well."
+                - Do not use "Dear", bracket placeholders, or names like [Hiring Manager Name].
+                - Sound professional, concise, confident, recruiter-friendly, and human-written.
+                - Avoid weak phrases like "if my profile looks suitable" and avoid sounding desperate.
+                - Mention matching skills, years of experience, backend/system design experience, and relevant projects or domains only when present in the resume.
+                - Prefer this structure: greeting, reaching out regarding role, experience + strongest matching skills, current work/projects hook, resume/next-step ask, thanks, sign-off.
+                - Do not hallucinate skills, companies, projects, metrics, employers, or years that are not present in the resume.
+                - Prioritize JD keywords that are actually present in the resume.
+                - linkedinMessage must be shorter than 450 characters.
+                - atsScore must be an integer from 0 to 100 based on overlap between resume and JD.
+                - matchedSkills and missingKeywords must be arrays of concise strings.
+                - End emailBody with "Best regards" followed by the candidate name from the resume. If unsure, use: %s.
+
+                Existing subject, if user supplied one:
+                %s
+
+                %s
+
+                %s
+                """.formatted(safeName, safeSubject, originalResumeSection(resumeText), jobDescriptionSection(jdText));
+    }
 }
